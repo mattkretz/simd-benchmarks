@@ -69,37 +69,47 @@ struct RightIntConst
 : Left<false>, Const<true>, IntInit
 { static constexpr char name[9] = "`x >> 6`"; };
 
-template <bool Latency, class T, class What>
-  double
-  benchmark()
+template <class What>
+  struct Benchmark<What> : DefaultBenchmark
   {
-    T a_init = T() + 23;
-    auto b_init = What::template rhs_init<T>();
-    return time_mean<50'000'000>([&]() {
-             auto a = a_init;
-             auto b = b_init;
-             fake_modify(a);
-             if constexpr (What::rhs_const)
-               {
-                 constexpr auto tmp = What::template rhs_init<T>();
-                 b = tmp;
-               }
-             else
-               fake_modify(b);
-             T r = What::left ? a << b : a >> b;
-             if constexpr (Latency)
-               {
-                 a_init = r;
-                 if constexpr (!What::rhs_const)
+    template <bool Latency, class T>
+      static double
+      do_benchmark()
+      {
+        T a_init = T() + 23;
+        auto b_init = What::template rhs_init<T>();
+        return time_mean<50'000'000>([&]() {
+                 auto a = a_init;
+                 auto b = b_init;
+                 fake_modify(a);
+                 if constexpr (What::rhs_const)
                    {
-                     fake_modify(b, b_init);
-                     b_init = b;
+                     constexpr auto tmp = What::template rhs_init<T>();
+                     b = tmp;
                    }
-               }
-             else
-               fake_read(r);
-           });
-  }
+                 else
+                   fake_modify(b);
+                 T r = What::left ? a << b : a >> b;
+                 if constexpr (Latency)
+                   {
+                     a_init = r;
+                     if constexpr (!What::rhs_const)
+                       {
+                         fake_modify(b, b_init);
+                         b_init = b;
+                       }
+                   }
+                 else
+                   fake_read(r);
+               });
+      }
+
+    template <class T>
+      [[gnu::flatten]]
+      static Times<2>
+      run()
+      { return {do_benchmark<true, T>(), do_benchmark<false, T>()}; }
+  };
 
 template <class T>
   void

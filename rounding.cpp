@@ -40,50 +40,60 @@ template <class T>
       }
   }
 
-template <bool Latency, class T, class What>
-  double
-  benchmark()
+template <class What>
+  struct Benchmark<What> : DefaultBenchmark
   {
-    std::vector<T> input;
-    input.reserve(1024);
-    for (int n = input.capacity(); n; --n)
-      input.push_back(random<T>());
-    T a = T();
-    int i = 0;
-    return time_mean<5'000'000>([&]() {
-             a += input[i];
-             i = (i + 1) % input.size();
-             fake_modify(a);
-             using ::floor;
-             using ::ceil;
-             using ::round;
-             using ::rint;
-             using ::nearbyint;
-             using std::floor;
-             using std::ceil;
-             using std::round;
-             using std::rint;
-             using std::nearbyint;
-             T r;
-             if constexpr (std::is_same_v<What, Floor>)
-               r = floor(a);
-             else if constexpr (std::is_same_v<What, Ceil>)
-               r = ceil(a);
-             else if constexpr (std::is_same_v<What, Round>)
-               r = round(a);
-             else if constexpr (std::is_same_v<What, Rint>)
-               r = rint(a);
-             else if constexpr (std::is_same_v<What, Nearbyint>)
-               r = nearbyint(a);
-             if constexpr (Latency)
-               a = r;
-             else
-               {
-                 a = T();
-                 fake_read(r);
-               }
-           });
-  }
+    template <bool Latency, class T>
+      static double
+      do_benchmark()
+      {
+        std::vector<T> input;
+        input.reserve(1024);
+        for (int n = input.capacity(); n; --n)
+          input.push_back(random<T>());
+        T a = T();
+        int i = 0;
+        return time_mean<5'000'000>([&]() {
+                 a += input[i];
+                 i = (i + 1) % input.size();
+                 fake_modify(a);
+                 using ::floor;
+                 using ::ceil;
+                 using ::round;
+                 using ::rint;
+                 using ::nearbyint;
+                 using std::floor;
+                 using std::ceil;
+                 using std::round;
+                 using std::rint;
+                 using std::nearbyint;
+                 T r;
+                 if constexpr (std::is_same_v<What, Floor>)
+                   r = floor(a);
+                 else if constexpr (std::is_same_v<What, Ceil>)
+                   r = ceil(a);
+                 else if constexpr (std::is_same_v<What, Round>)
+                   r = round(a);
+                 else if constexpr (std::is_same_v<What, Rint>)
+                   r = rint(a);
+                 else if constexpr (std::is_same_v<What, Nearbyint>)
+                   r = nearbyint(a);
+                 if constexpr (Latency)
+                   a = r;
+                 else
+                   {
+                     a = T();
+                     fake_read(r);
+                   }
+               });
+      }
+
+    template <class T>
+      [[gnu::flatten]]
+      static Times<2>
+      run()
+      { return {do_benchmark<true, T>(), do_benchmark<false, T>()}; }
+  };
 
 int
 main()
