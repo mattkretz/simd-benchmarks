@@ -41,14 +41,15 @@ fi
 
 #CCACHE=`which ccache 2>/dev/null` || CCACHE=
 
+mkdir -p bin
 ${0%/*}/benchmark-mode.sh on
 for arch in ${arch_list}; do
   CXXFLAGS="-g0 -O3 -std=gnu++20 -march=$arch -lmvec"
 
-  echo $CXX $CXXFLAGS ${flags[@]} ${name}.cpp -o "$name-$arch"
-  ccache $CXX $CXXFLAGS ${flags[@]} ${name}.cpp -o "$name-$arch" && \
+  echo $CXX $CXXFLAGS ${flags[@]} ${name}.cpp -o "bin/$name-$arch"
+  ccache $CXX $CXXFLAGS ${flags[@]} ${name}.cpp -o "bin/$name-$arch" && \
     echo "-march=$arch $flags:" && \
-    sudo chrt --fifo 50 ./"$name-$arch"
+    sudo chrt --fifo 50 "bin/$name-$arch"
 done
 ${0%/*}/benchmark-mode.sh off
 
