@@ -1,56 +1,99 @@
 #!/bin/bash
 
-usage() {
-  cat <<EOF
-Usage: $0 <name> [<compiler -f -I or -D flags>] [<arch list>]
+dir="${0%/*}"
 
-<name> must be one of: $(echo *.cpp|sed 's/.cpp\>//g')
+usage() {
+  archlist=$($CXX -x c++ -march=xxx - 2>&1 </dev/null|grep 'valid arguments'|sed 's/^.*are: //')
+  cat <<EOF
+Usage: $0 <name> [<compiler -std -f -O -I or -D flags>] [<arch list>]
+
+<name> must be one of:
+$(cd "$dir"; echo *.cpp|sed 's/\.cpp\>//g')
+
+<arch list> can be any combination of:
+$archlist
+
+The arguments can be given in any order.
 EOF
 }
 
-name=$1
-flags=()
-shift
-while (($# > 0)); do
-    case "$1" in
-        -f*)
-            flags=(${flags[@]} $1)
-            ;;
-        -[ID])
-            flags=(${flags[@]} $1$2)
-            shift
-            ;;
-        -[ID]*)
-            flags=(${flags[@]} $1)
-            ;;
-        *)
-            arch_list="$arch_list $1"
-            ;;
-    esac
-    shift
-done
-test -z "$arch_list" && arch_list="native westmere k8"
-
-if ! test -r ${name}.cpp; then
-  name=${name%.cpp}
-  if ! test -r ${name}.cpp; then
+name=
+set_name() {
+  if [[ -n "$name" ]]; then
+    echo "ERROR: more than one benchmark name was given."
+    echo
     usage
     exit 1
+  elif [[ ! -r "$dir/${1}.cpp" ]]; then
+    echo "ERROR: benchmark '$1' not found."
+    echo
+    usage
+    exit 1
+  else
+    name="$1"
   fi
+}
+
+std=-std=gnu++20
+opt=-O3
+flags=()
+while (($# > 0)); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -O*)
+      opt="$1"
+      ;;
+    -std=*)
+      std="$1"
+      ;;
+    -f*)
+      flags=(${flags[@]} $1)
+      ;;
+    -[ID])
+      flags=(${flags[@]} $1$2)
+      shift
+      ;;
+    -[ID]*)
+      flags=(${flags[@]} $1)
+      ;;
+    *.cpp)
+      set_name "${1%.cpp}"
+      ;;
+    *)
+      if [[ -r "$dir/${1}.cpp" ]]; then
+        set_name "$1"
+      else
+        arch_list="$arch_list $1"
+      fi
+      ;;
+  esac
+  shift
+done
+
+test -z "$arch_list" && arch_list="native westmere k8"
+
+if [[ -z "$name" ]]; then
+  echo "ERROR: benchmark name is missing."
+  echo
+  usage
+  exit 1
 fi
 
-#CCACHE=`which ccache 2>/dev/null` || CCACHE=
+CCACHE=`which ccache 2>/dev/null` || CCACHE=
 
-mkdir -p bin
-${0%/*}/benchmark-mode.sh on
+mkdir -p "$dir/bin"
 for arch in ${arch_list}; do
-  CXXFLAGS="-g0 -O3 -std=gnu++20 -march=$arch -lmvec"
+  CXXFLAGS="-g0 $opt $std -march=$arch -lmvec"
 
-  echo $CXX $CXXFLAGS ${flags[@]} ${name}.cpp -o "bin/$name-$arch"
-  ccache $CXX $CXXFLAGS ${flags[@]} ${name}.cpp -o "bin/$name-$arch" && \
+  echo $CCACHE $CXX $CXXFLAGS ${flags[@]} "$dir/${name}.cpp" -o "$dir/bin/$name-$arch"
+  $CCACHE $CXX $CXXFLAGS ${flags[@]} "$dir/${name}.cpp" -o "$dir/bin/$name-$arch" && \
     echo "-march=$arch $flags:" && \
-    sudo chrt --fifo 50 "bin/$name-$arch"
+    "$dir/benchmark-mode.sh" on && \
+    sudo chrt --fifo 50 "$dir/bin/$name-$arch"
+  "$dir/benchmark-mode.sh" off
 done
-${0%/*}/benchmark-mode.sh off
 
 # vim: tw=0 si
