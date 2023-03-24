@@ -187,6 +187,9 @@ template <class What>
 int
 main()
 {
+#if defined ONLY
+  bench_all<ONLY>();
+#else
   all_integers<LeftVec>();
   all_integers<LeftVecConst>();
   all_integers<LeftInt>();
@@ -195,4 +198,5 @@ main()
   all_integers<RightVecConst>();
   all_integers<RightInt>();
   all_integers<RightIntConst>();
+#endif
 }
