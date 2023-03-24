@@ -246,18 +246,63 @@ template <class T, class... ExtraFlags>
     std::cout << sep << std::endl;
   }
 
-template <long Iterations, class F, class... Args>
+template <long Iterations, int Retries = 10, class F>
+  double
+  time_mean2(F&& fun)
+  {
+    struct {
+      double mean = 0;
+      double minimum = std::numeric_limits<double>::max();
+      unsigned long tsc_start = 0;
+      int todo = Retries;
+      long it = 1;
+
+      [[gnu::always_inline]]
+      operator bool() &
+      {
+        if (--it > 0) [[likely]]
+        return true;
+
+        unsigned int tmp = 0;
+        const auto tsc_end = __rdtscp(&tmp);
+        if (todo < Retries)
+          {
+            const double elapsed = tsc_end - tsc_start;
+            const double one_mean = elapsed / Iterations;
+            mean += one_mean / Retries;
+            minimum = std::min(minimum, one_mean);
+          }
+        if (todo) [[likely]]
+        {
+          --todo;
+          it = Iterations + 1;
+          tsc_start = __rdtscp(&tmp);
+          return true;
+        }
+        return false;
+      }
+    } collector;
+    fun(collector);
+    return collector.minimum;
+  }
+
+template <long Iterations, int Retries = 10, class F, class... Args>
   double
   time_mean(F&& fun, Args&&... args)
   {
-    unsigned int tmp;
-    long i = Iterations;
-    const auto start = __rdtscp(&tmp);
-    for (; i; --i)
-      fun(std::forward<Args>(args)...);
-    const auto end = __rdtscp(&tmp);
-    const double elapsed = end - start;
-    return elapsed / Iterations;
+    double minimum = std::numeric_limits<double>::max();
+    for (int tries = 0; tries < Retries; ++tries)
+      {
+        unsigned int tmp;
+        long i = Iterations;
+        const auto start = __rdtscp(&tmp);
+        for (; i; --i)
+          fun(std::forward<Args>(args)...);
+        const auto end = __rdtscp(&tmp);
+        const double elapsed = end - start;
+        minimum = std::min(minimum, elapsed);
+      }
+    return minimum / Iterations;
   }
 
 template <typename T>

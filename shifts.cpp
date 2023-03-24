@@ -73,35 +73,80 @@ template <class What>
   struct Benchmark<What> : DefaultBenchmark
   {
     template <bool Latency, class T>
+      [[gnu::noinline]]
       static double
       do_benchmark()
       {
         T a_init = T() + 23;
         auto b_init = What::template rhs_init<T>();
-        return time_mean<50'000'000>([&]() {
-                 auto a = a_init;
-                 auto b = b_init;
-                 fake_modify(a);
-                 if constexpr (What::rhs_const)
-                   {
-                     constexpr auto tmp = What::template rhs_init<T>();
-                     b = tmp;
-                   }
-                 else
-                   fake_modify(b);
-                 T r = What::left ? a << b : a >> b;
-                 if constexpr (Latency)
-                   {
-                     a_init = r;
-                     if constexpr (!What::rhs_const)
-                       {
-                         fake_modify(b, b_init);
-                         b_init = b;
-                       }
-                   }
-                 else
-                   fake_read(r);
-               });
+        if constexpr (Latency)
+          return 0.25 * time_mean2<4'000'000, 10>([&](auto& need_more)
+          {
+            auto a = a_init;
+            auto b = What::template rhs_init<T>();
+            while (need_more)
+              {
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                a = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                a = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                a = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                a = What::left ? a << b : a >> b;
+              }
+            fake_read(a);
+          });
+        else
+          return 0.125 * time_mean2<3'000'000, 10>([&](auto& need_more)
+          {
+            while (need_more)
+              {
+                auto a = a_init;
+                auto b = What::template rhs_init<T>();
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                const T r0 = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                const T r1 = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                const T r2 = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                const T r3 = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                const T r4 = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                const T r5 = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                const T r6 = What::left ? a << b : a >> b;
+                fake_modify(a);
+                if constexpr (not What::rhs_const)
+                  fake_modify(b);
+                const T r7 = What::left ? a << b : a >> b;
+                fake_read(r0, r1, r2, r3, r4, r5, r6, r7);
+              }
+          });
       }
 
     template <class T>
