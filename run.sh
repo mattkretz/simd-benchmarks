@@ -50,14 +50,14 @@ while (($# > 0)); do
       std="$1"
       ;;
     -f*)
-      flags=(${flags[@]} $1)
+      flags=("${flags[@]}" "$1")
       ;;
     -[ID])
-      flags=(${flags[@]} $1$2)
+      flags=("${flags[@]}" "$1$2")
       shift
       ;;
     -[ID]*)
-      flags=(${flags[@]} $1)
+      flags=("${flags[@]}" "$1")
       ;;
     *.cpp)
       set_name "${1%.cpp}"
@@ -88,8 +88,8 @@ mkdir -p "$dir/bin"
 for arch in ${arch_list}; do
   CXXFLAGS="-g0 $opt $std -march=$arch -lmvec"
 
-  echo $CCACHE $CXX $CXXFLAGS ${flags[@]} "$dir/${name}.cpp" -o "$dir/bin/$name-$arch"
-  $CCACHE $CXX $CXXFLAGS ${flags[@]} "$dir/${name}.cpp" -o "$dir/bin/$name-$arch" && \
+  echo $CCACHE $CXX $CXXFLAGS "${flags[@]}" "$dir/${name}.cpp" -o "$dir/bin/$name-$arch"
+  $CCACHE $CXX $CXXFLAGS "${flags[@]}" "$dir/${name}.cpp" -o "$dir/bin/$name-$arch" && \
     echo "-march=$arch $flags:" && \
     "$dir/benchmark-mode.sh" on && \
     sudo chrt --fifo 50 "$dir/bin/$name-$arch"
