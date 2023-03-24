@@ -264,8 +264,24 @@ template <typename T>
   [[gnu::always_inline]] inline void
   fake_modify1(T& x)
   {
-    if constexpr (sizeof(T) >= 16 || std::is_floating_point_v<T>)
-      asm volatile("" : "+xm"(x));
+    if constexpr (std::is_floating_point_v<T>)
+      asm volatile("" : "+x"(x));
+    else if constexpr (stdx::is_simd_v<T> || stdx::is_simd_mask_v<T>)
+      {
+        auto& d = stdx::__data(x);
+        if constexpr (sizeof(d) <= 8)
+          asm volatile("" : "+g"(d));
+        else if constexpr (requires {{d._M_data};})
+          asm volatile("" : "+x"(d._M_data));
+        else if constexpr (requires {{d._S_tuple_size};})
+          stdx::__for_each(d, [](auto, auto& element) {
+            fake_modify1(element);
+          });
+        else
+          asm volatile("" : "+x"(d));
+      }
+    else if constexpr (sizeof(x) >= 16)
+      asm volatile("" : "+x"(x));
     else
       asm volatile("" : "+g"(x));
   }
@@ -279,8 +295,24 @@ template <typename T>
   [[gnu::always_inline]] inline void
   fake_read1(const T& x)
   {
-    if constexpr (sizeof(T) >= 16 || std::is_floating_point_v<T>)
-      asm volatile("" ::"xm"(x));
+    if constexpr (std::is_floating_point_v<T>)
+      asm volatile("" ::"x"(x));
+    else if constexpr (stdx::is_simd_v<T> || stdx::is_simd_mask_v<T>)
+      {
+        const auto& d = stdx::__data(x);
+        if constexpr (sizeof(d) <= 8)
+          asm volatile("" ::"g"(d));
+        else if constexpr (requires {{d._M_data};})
+          asm volatile("" ::"x"(d));
+        else if constexpr (requires {{d._S_tuple_size};})
+          stdx::__for_each(d, [](auto, const auto& element) {
+            fake_read1(element);
+          });
+        else
+          asm volatile("" ::"x"(d));
+      }
+    else if constexpr (sizeof(x) >= 16)
+      asm volatile("" ::"x"(x));
     else
       asm volatile("" ::"g"(x));
   }
