@@ -208,6 +208,8 @@ template <class T, class... ExtraFlags>
     bench_lat_thr<simd<T, __sse>, ExtraFlags...>(id, ref);
     set_abistr("simd_abi::__avx");
     bench_lat_thr<simd<T, __avx>, ExtraFlags...>(id, ref);
+    set_abistr("simd_abi::_VecBuiltin<8>");
+    bench_lat_thr<simd<T, _VecBuiltin<8>>, ExtraFlags...>(id, ref);
     set_abistr("simd_abi::_Avx512<32>");
     bench_lat_thr<simd<T, _Avx512<32>>, ExtraFlags...>(id, ref);
     set_abistr("simd_abi::_Avx512<64>");
