@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright © 2019-2023 GSI Helmholtzzentrum fuer Schwerionenforschung GmbH
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright © 2019-2024 GSI Helmholtzzentrum fuer Schwerionenforschung GmbH
  *                       Matthias Kretz <m.kretz@gsi.de>
  */
 
@@ -7,9 +7,11 @@
 
 MAKE_VECTORMATH_OVERLOAD(hypot)
 
-template <>
-  struct Benchmark<> : DefaultBenchmark
+template <int Special>
+  struct Benchmark<Special>
   {
+    static constexpr Info<2> info = {"Latency", "Throughput"};
+
     template <bool Latency, class T>
       static double
       do_benchmark()
@@ -18,7 +20,7 @@ template <>
         T b = T() + 0x1.82a4bcp-9f;
         // b = std::numeric_limits<T>::quiet_NaN();
         T c = T() + 0x1.f323e6p2f;
-        return time_mean<50'000'000>([&]() {
+        return time_mean<30'000'000>([&]() {
                  using ::hypot;
                  using std::hypot;
                  using std::experimental::hypot;

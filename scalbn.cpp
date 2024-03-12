@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright © 2019-2023 GSI Helmholtzzentrum fuer Schwerionenforschung GmbH
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright © 2019-2024 GSI Helmholtzzentrum fuer Schwerionenforschung GmbH
  *                       Matthias Kretz <m.kretz@gsi.de>
  */
 
@@ -7,9 +7,11 @@
 
 FUN2(scalbn) Scalbn;
 
-template <class What>
-  struct Benchmark<What> : DefaultBenchmark
+template <int Special, class What>
+  struct Benchmark<Special, What>
   {
+    static constexpr Info<2> info = {"Latency", "Throughput"};
+
     template <class T>
       [[gnu::flatten]]
       static Times<2>
