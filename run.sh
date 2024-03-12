@@ -1,6 +1,7 @@
 #!/bin/bash
 
 dir="${0%/*}"
+[[ "$dir" == '.' ]] && dir="$PWD"
 
 usage() {
   archlist=$($CXX -x c++ -march=xxx - 2>&1 </dev/null|grep 'valid arguments'|sed 's/^.*are: //')
@@ -34,9 +35,9 @@ set_name() {
   fi
 }
 
-std=-std=gnu++20
+std=-std=gnu++2b
 opt=-O3
-flags=()
+flags=("-static-libstdc++")
 while (($# > 0)); do
   case "$1" in
     -h|--help)
@@ -75,6 +76,16 @@ done
 
 test -z "$arch_list" && arch_list="native westmere k8"
 
+CCACHE=`which ccache 2>/dev/null` || CCACHE=
+
+mkdir -p "$dir/bin"
+
+cxxflags="-g0 $opt $std"
+{
+  cd "$dir"
+  make -s CXXFLAGS="$cxxflags" bin/compile_commands.json
+}
+
 if [[ -z "$name" ]]; then
   echo "ERROR: benchmark name is missing."
   echo
@@ -82,11 +93,8 @@ if [[ -z "$name" ]]; then
   exit 1
 fi
 
-CCACHE=`which ccache 2>/dev/null` || CCACHE=
-
-mkdir -p "$dir/bin"
 for arch in ${arch_list}; do
-  CXXFLAGS="-g0 $opt $std -march=$arch -lmvec"
+  CXXFLAGS="$cxxflags -march=$arch -lmvec"
 
   echo $CCACHE $CXX $CXXFLAGS "${flags[@]}" "$dir/${name}.cpp" -o "$dir/bin/$name-$arch"
   $CCACHE $CXX $CXXFLAGS "${flags[@]}" "$dir/${name}.cpp" -o "$dir/bin/$name-$arch" && \
