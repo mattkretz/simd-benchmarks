@@ -1,6 +1,7 @@
 # stdx::simd Benchmarks
 
 [![DOI](https://zenodo.org/badge/771078921.svg)](https://zenodo.org/doi/10.5281/zenodo.10810248)
+[![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B%20%20%E2%97%8F%20%20%E2%97%8B-orange)](https://fair-software.eu)
 
 This repository collects benchmarks for `std::experimental::simd`. The 
 benchmarks are a set of micro-benchmarks that try to capture *latency* and 
