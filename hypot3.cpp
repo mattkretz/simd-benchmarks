@@ -7,10 +7,176 @@
 
 MAKE_VECTORMATH_OVERLOAD(hypot)
 
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=77776
+template <typename T>
+  constexpr T
+  hypot3_exp(T x, T y, T z) noexcept
+  {
+    using limits = std::numeric_limits<T>;
+
+    constexpr T
+    zero = 0;
+
+    x = std::abs(x);
+    y = std::abs(y);
+    z = std::abs(z);
+
+    if (std::isinf(x) | std::isinf(y) | std::isinf(z))  [[unlikely]]
+      return limits::infinity();
+    if (std::isnan(x) | std::isnan(y) | std::isnan(z))	[[unlikely]]
+      return limits::quiet_NaN();
+    if ((x==zero) & (y==zero) & (z==zero))	[[unlikely]]
+      return zero;
+    if ((y==zero) & (z==zero))	[[unlikely]]
+      return x;
+    if ((x==zero) & (z==zero))	[[unlikely]]
+      return y;
+    if ((x==zero) & (y==zero))	[[unlikely]]
+      return z;
+
+    auto sort = [](T& a, T& b, T& c)	constexpr noexcept -> void
+    {
+      if (a > b) std::swap(a, b);
+      if (b > c) std::swap(b, c);
+      if (a > b) std::swap(a, b);
+    };
+
+    sort(x, y, z);	//	x <= y <= z
+
+    int
+      exp = 0;
+
+    z = std::frexp(z, &exp);
+    y = std::ldexp(y, -exp);
+    x = std::ldexp(x, -exp);
+
+    T
+    sum = x*x + y*y;
+
+    sum += z*z;
+    return std::ldexp(std::sqrt(sum), exp);
+  }
+
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=77776
+template <typename T>
+  constexpr T
+  hypot3_scale(T x, T y, T z) noexcept
+  {
+    using limits = std::numeric_limits<T>;
+
+    auto prev_power2 = [](const T value)	constexpr noexcept -> T
+    {
+      return std::exp2(std::floor(std::log2(value)));
+    };
+
+    constexpr T sqrtmax = std::sqrt(limits::max());
+    constexpr T scale_up = prev_power2(sqrtmax);
+    constexpr T scale_down = T(1) / scale_up;
+    constexpr T zero = 0;
+
+    x = std::abs(x);
+    y = std::abs(y);
+    z = std::abs(z);
+
+    if (std::isinf(x) | std::isinf(y) | std::isinf(z))  [[unlikely]]
+      return limits::infinity();
+    if (std::isnan(x) | std::isnan(y) | std::isnan(z))	[[unlikely]]
+      return limits::quiet_NaN();
+    if ((x==zero) & (y==zero) & (z==zero))	[[unlikely]]
+      return zero;
+    if ((y==zero) & (z==zero))	[[unlikely]]
+      return x;
+    if ((x==zero) & (z==zero))	[[unlikely]]
+      return y;
+    if ((x==zero) & (y==zero))	[[unlikely]]
+      return z;
+
+    auto sort = [](T& a, T& b, T& c)	constexpr noexcept -> void
+    {
+      if (a > b) std::swap(a, b);
+      if (b > c) std::swap(b, c);
+      if (a > b) std::swap(a, b);
+    };
+
+    sort(x, y, z);	//	x <= y <= z
+
+    const T
+    scale = (z > sqrtmax) ? scale_down : (z < 1) ? scale_up : 1;
+
+    x *= scale;
+    y *= scale;
+    z *= scale;
+
+    T
+    sum = x*x + y*y;
+
+    sum += z*z;
+    return std::sqrt(sum) / scale;
+  }
+
+template <typename T>
+  constexpr T
+  hypot3_mkretz(T x, T y, T z)
+  {
+    using limits = std::numeric_limits<T>;
+
+    auto prev_power2 = [](const T value) constexpr noexcept -> T
+    {
+      return std::exp2(std::floor(std::log2(value)));
+    };
+
+    constexpr T sqrtmax = std::sqrt(limits::max());
+    constexpr T sqrtmin = std::sqrt(limits::min());
+    constexpr T scale_up = prev_power2(sqrtmax);
+    constexpr T scale_down = T(1) / scale_up;
+    constexpr T zero = 0;
+
+    if (not (std::isnormal(x) && std::isnormal(y) && std::isnormal(z))) [[unlikely]]
+      {
+        if (std::isinf(x) | std::isinf(y) | std::isinf(z))
+          return limits::infinity();
+        else if (std::isnan(x) | std::isnan(y) | std::isnan(z))
+          return limits::quiet_NaN();
+        const bool xz = x == zero;
+        const bool yz = y == zero;
+        const bool zz = z == zero;
+        if (xz)
+          {
+            if (yz)
+              return zz ? zero : z;
+            else if (zz)
+              return y;
+          }
+        else if (yz && zz)
+          return x;
+      }
+
+    x = std::abs(x);
+    y = std::abs(y);
+    z = std::abs(z);
+
+    T a = std::max(std::max(x, y), z);
+    T b = std::min(std::max(x, y), z);
+    T c = std::min(x, y);
+
+    if (a >= sqrtmin && a <= sqrtmax) [[likely]]
+      return std::sqrt(__builtin_assoc_barrier(c * c + b * b) + a * a);
+
+    const T scale = a >= sqrtmin ? scale_down : scale_up;
+
+    a *= scale;
+    b *= scale;
+    c *= scale;
+
+    return std::sqrt(__builtin_assoc_barrier(c * c + b * b) + a * a) / scale;
+  }
+
 template <int Special>
   struct Benchmark<Special>
   {
     static constexpr Info<2> info = {"Latency", "Throughput"};
+
+    static constexpr std::array more_types = {"hypot3_exp", "hypot3_scale", "hypot3_mkretz"};
 
     template <bool Latency, class T>
       static double
@@ -25,7 +191,17 @@ template <int Special>
                  using std::hypot;
                  using std::experimental::hypot;
                  fake_modify(a, b, c);
-                 T r = hypot(a, b, c);
+                 T r;
+
+                 if constexpr (Special == 0)
+                   r = hypot(a, b, c);
+                 else if constexpr (Special == 1)
+                   r = hypot3_exp(a, b, c);
+                 else if constexpr (Special == 2)
+                   r = hypot3_scale(a, b, c);
+                 else if constexpr (Special == 3)
+                   r = hypot3_mkretz(a, b, c);
+
                  if constexpr (Latency)
                    a = r;
                  else
