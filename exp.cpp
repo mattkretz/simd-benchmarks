@@ -20,8 +20,7 @@ template <int Special, class What>
       {
         T inputs[64] = {};
         for (int i = 0; i < 64; ++i)
-          inputs[i] = T() + i * .83f - 16;
-        unsigned i = 0;
+          inputs[i] = T() + i * .83f - value_type_t<T>(16);
         T a0 = inputs[0];
         T a1 = inputs[1];
         T a2 = inputs[2];

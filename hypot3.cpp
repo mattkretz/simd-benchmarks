@@ -174,9 +174,28 @@ template <typename T>
 template <int Special>
   struct Benchmark<Special>
   {
-    static constexpr Info<2> info = {"Latency", "Throughput"};
+    static constexpr std::array info = {"ΔLatency", "ΔThroughput", "Latency", "Throughput"};
 
     static constexpr std::array more_types = {"hypot3_exp", "hypot3_scale", "hypot3_mkretz"};
+
+    template <class T>
+      [[gnu::always_inline]]
+      static T call_hypot(T a, T b, T c)
+      {
+        using ::hypot;
+        using std::hypot;
+#if not USE_STD_SIMD
+        using std::experimental::hypot;
+#endif
+        if constexpr (Special == 0)
+          return hypot(a, b, c);
+        else if constexpr (Special == 1)
+          return hypot3_exp(a, b, c);
+        else if constexpr (Special == 2)
+          return hypot3_scale(a, b, c);
+        else if constexpr (Special == 3)
+          return hypot3_mkretz(a, b, c);
+      }
 
     template <bool Latency, class T>
       static double
@@ -186,34 +205,70 @@ template <int Special>
         T b = T() + 0x1.82a4bcp-9f;
         // b = std::numeric_limits<T>::quiet_NaN();
         T c = T() + 0x1.f323e6p2f;
-        return time_mean<30'000'000>([&]() {
-                 using ::hypot;
-                 using std::hypot;
-                 using std::experimental::hypot;
-                 fake_modify(a, b, c);
-                 T r;
-
-                 if constexpr (Special == 0)
-                   r = hypot(a, b, c);
-                 else if constexpr (Special == 1)
-                   r = hypot3_exp(a, b, c);
-                 else if constexpr (Special == 2)
-                   r = hypot3_scale(a, b, c);
-                 else if constexpr (Special == 3)
-                   r = hypot3_mkretz(a, b, c);
-
-                 if constexpr (Latency)
-                   a = r;
-                 else
-                   fake_read(r);
-               });
+        return .5 * time_mean2<300'000>([&](auto& need_more) {
+                      while (need_more)
+                        {
+                          fake_modify(a, b, c);
+                          T r = call_hypot(a, b, c);
+                          if constexpr (Latency)
+                            a = r;
+                          else
+                            fake_read(r);
+                          fake_modify(a, b, c);
+                          r = call_hypot(a, b, c);
+                          if constexpr (Latency)
+                            a = r;
+                          else
+                            fake_read(r);
+                        }
+                    });
       }
 
     template <class T>
-      [[gnu::flatten]]
-      static Times<2>
+      static Times<info.size()>
       run()
-      { return {do_benchmark<true, T>(), do_benchmark<false, T>()}; }
+      {
+        T zero = T();
+        T half = T() + value_type_t<T>(.5);
+        fake_modify(zero, half);
+        auto process_one = [=](auto& inout) [[gnu::always_inline]] {
+          T a = inout[0] + zero;
+          T b = inout[1] + zero;
+          T c = inout[2] + zero;
+          T x = call_hypot(a, b, c);
+          inout[0] = a + x * zero;
+          inout[1] = b + x * zero;
+          inout[2] = c + x * zero;
+        };
+
+        auto fake_one = [=](auto& inout) [[gnu::always_inline]] {
+          T a = inout[0] + zero;
+          T b = inout[1] + zero;
+          T c = inout[2] + zero;
+          T x = a;
+          T y = b;
+          T z = c;
+          fake_modify(x, y, z);
+          inout[0] = a + x * zero;
+          inout[1] = b + y * zero;
+          inout[2] = c + z * zero;
+        };
+
+        std::array<T, 3> data[8] = {};
+        for (auto& d : data)
+          {
+            d[0] += 0x1.fe8222p-10f;
+            d[1] += 0x1.82a4bcp-9f;
+            d[2] += 0x1.f323e6p-2f;
+          }
+        const Times<4> r = {
+          time_latency(data, process_one, fake_one),
+          time_throughput(data, process_one, fake_one),
+          do_benchmark<true, T>(), do_benchmark<false, T>()
+        };
+        //std::cout << data[0][0] << ' ' << data[0][1] << ' ' << data[0][2] << std::endl;
+        return r;
+      }
   };
 
 int

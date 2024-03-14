@@ -6,7 +6,7 @@ dir="${0%/*}"
 usage() {
   archlist=$($CXX -x c++ -march=xxx - 2>&1 </dev/null|grep 'valid arguments'|sed 's/^.*are: //')
   cat <<EOF
-Usage: $0 <name> [<compiler -std -f -O -I or -D flags>] [<arch list>]
+Usage: $0 <name> [<compiler -std -f -O -include -I or -D flags>] [<arch list>]
 
 <name> must be one of:
 $(cd "$dir"; echo *.cpp|sed 's/\.cpp\>//g')
@@ -53,6 +53,10 @@ while (($# > 0)); do
     -f*)
       flags=("${flags[@]}" "$1")
       ;;
+    -include)
+      flags=("${flags[@]}" "$1" "$2")
+      shift
+      ;;
     -[ID])
       flags=("${flags[@]}" "$1$2")
       shift
@@ -80,7 +84,7 @@ CCACHE=`which ccache 2>/dev/null` || CCACHE=
 
 mkdir -p "$dir/bin"
 
-cxxflags="-g0 $opt $std"
+cxxflags="-g0 -Wall -Wextra -Wno-psabi $opt $std"
 {
   cd "$dir"
   make -s CXXFLAGS="$cxxflags" bin/compile_commands.json
@@ -93,15 +97,28 @@ if [[ -z "$name" ]]; then
   exit 1
 fi
 
+realtime="chrt --fifo 10"
+$realtime true 2>/dev/null || realtime=
+
+if [[ -z "$realtime" ]]; then
+  echo "Add '$USER  -  rtprio  10' to /etc/security/limits.conf for less noisy benchmark results"
+fi
+
 for arch in ${arch_list}; do
-  CXXFLAGS="$cxxflags -march=$arch -lmvec"
+  if [[ $arch == "generic" ]]; then
+    CXXFLAGS="$cxxflags -lmvec"
+  else
+    CXXFLAGS="$cxxflags -march=$arch -lmvec"
+  fi
 
   echo $CCACHE $CXX $CXXFLAGS "${flags[@]}" "$dir/${name}.cpp" -o "$dir/bin/$name-$arch"
-  $CCACHE $CXX $CXXFLAGS "${flags[@]}" "$dir/${name}.cpp" -o "$dir/bin/$name-$arch" && \
-    echo "-march=$arch $flags:" && \
-    "$dir/benchmark-mode.sh" on && \
-    sudo chrt --fifo 50 "$dir/bin/$name-$arch"
-  "$dir/benchmark-mode.sh" off
+  $CCACHE $CXX $CXXFLAGS "${flags[@]}" "$dir/${name}.cpp" -o "$dir/bin/$name-$arch"
+  if (($? == 0)); then
+    echo "-march=$arch $flags:"
+    "$dir/benchmark-mode.sh" on
+    $realtime "$dir/bin/$name-$arch"
+    "$dir/benchmark-mode.sh" off
+  fi
 done
 
 # vim: tw=0 si

@@ -11,11 +11,19 @@ struct VecInit
     static constexpr T
     rhs_init()
     {
-      if constexpr (std::experimental::is_simd_v<T>)
-        return T([](auto i) constexpr { return (int(i) % 31) + 1; });
-      else if constexpr (std::experimental::__is_vector_type_v<T>)
-        return std::experimental::__generate_vector<T>(
-                 [](auto i) constexpr { return (int(i) % 31) + 1; });
+      if constexpr (vec_builtin<T>)
+        return []<int... Is>(std::integer_sequence<int, Is...>) {
+          constexpr T r{value_type_t<T>((Is % 31) + 1)...};
+          return r;
+        }(std::make_integer_sequence<int, size_v<T>>());
+      else if constexpr (requires { typename T::abi_type; })
+        {
+#if USE_STD_SIMD
+          constexpr
+#endif
+          T r([](int i) -> T::value_type { return (i % 31) + 1; });
+          return r;
+        }
       else
         return 6;
     }
@@ -79,8 +87,8 @@ template <int Special, class What>
       static double
       do_benchmark()
       {
-        T a_init = T() + 23;
-        auto b_init = What::template rhs_init<T>();
+        using value_type = value_type_t<T>;
+        T a_init = T() + value_type(23);
         if constexpr (Latency)
           return 0.25 * time_mean2<4'000'000, 10>([&](auto& need_more)
           {

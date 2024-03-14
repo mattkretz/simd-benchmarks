@@ -29,7 +29,7 @@ template <int Special>
             a2 <<= nbits/2;
             a3 <<= nbits/2;
           }
-        T b = T() + 7;
+        T b = T() + TT(7);
         return {
           0.25 * time_mean<1'000'000>([&] {
             fake_modify(a0, b);

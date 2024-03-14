@@ -17,8 +17,13 @@ template <typename T>
     using Mem = value_type_t<T>;
     Mem* ptr = reinterpret_cast<Mem*>(mem + offset);
     fake_modify(x);
+#if USE_STD_SIMD
+    if constexpr (std::is_simd_v<T>)
+      x.copy_to(ptr);
+#else
     if constexpr (stdx::is_simd_v<T>)
       x.copy_to(ptr, stdx::element_aligned);
+#endif
     else if constexpr (std::is_arithmetic_v<T>)
       ptr[0] = x;
     else
@@ -35,12 +40,8 @@ template <int Special>
       static Times<1>
       run()
       {
-        using T = value_type_t<V>;
-        constexpr int N = 1024 / sizeof(T);
-        using Mem = alignas(64) T[N];
         return {
           0.0625 * time_mean2<400'000>([](auto& need_more) {
-                     Mem mem = {};
                      V obj = {};
                      while (need_more)
                        {

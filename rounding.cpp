@@ -29,15 +29,15 @@ template <class T>
         std::uniform_real_distribution<T> dis(-10.0, 20.0);
         return dis(rnd_gen);
       }
-    else if constexpr (std::experimental::is_simd_v<T>) 
-      return T([](int) { return random<typename T::value_type>(); });
-    else
+    else if constexpr (vec_builtin<T>)
       {
         T r = {};
         for (int i = 0; i < sizeof(T) / sizeof(r[0]); ++i)
           r[i] = random<std::remove_reference_t<decltype(r[0])>>();
         return r;
       }
+    else
+      return T([](int) { return random<typename T::value_type>(); });
   }
 
 template <int Special, class What>
