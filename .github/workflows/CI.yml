@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  gcc:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [13]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: simd-benchmarks
+
+      - uses: actions/checkout@v4
+        with:
+          repository: mattkretz/simd-prototyping
+          path: simd-prototyping
+
+      - name: Install GCC ${{ matrix.version }}
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y gcc-${{ matrix.version }} g++-${{ matrix.version }}
+
+      - name: Compile
+        env:
+          CXX: g++-${{ matrix.version }}
+        run: cd simd-benchmarks && make -j4
+
+  clang:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [18]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Clang ${{ matrix.version }}
+        run: |
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
+          sudo add-apt-repository 'deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${{ matrix.version }} main'
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y g++-13 clang-${{ matrix.version }}
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 110 --slave /usr/bin/g++ g++ /usr/bin/g++-13
+
+      - name: Compile
+        env:
+          CXX: clang++-${{ matrix.version }}
+        run: make -j4

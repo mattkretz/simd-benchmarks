@@ -40,7 +40,11 @@ endef
 
 $(foreach b,$(benchmarks),$(foreach v,$(variants),$(foreach a,$(archs),$(eval $(call maketarget,$b,$v,$a)))))
 
-all-targets: $(targets)
+.PHONY: all-targets
+all-targets: $(patsubst %,bin/%,$(targets))
+
+.PHONY: benchmark
+benchmark: $(targets)
 
 define ccjson
   { "directory": "$(PWD)",
@@ -59,3 +63,5 @@ bin/compile_commands.json: Makefile run.sh
 
 help: bin/compile_commands.json
 	@echo "$(targets)"|tr ' ' '\n'
+	@echo "benchmark"
+	@echo "all"
