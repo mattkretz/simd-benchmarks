@@ -19,14 +19,18 @@ all: all-targets
 debug:
 	@echo "$(realtime)"
 
+bin:
+	@mkdir -p bin
+
+data:
+	@mkdir -p data
+
 targets=
 define maketarget
-bin/$1-$2-$3: $1.cpp bench.h bin/compile_commands.json
-	@mkdir -p bin
+bin/$1-$2-$3: $1.cpp bench.h bin bin/compile_commands.json
 	$$(CXX) $$(CXXFLAGS) $$($2) -march=$3 -lmvec $1.cpp -o $$@
 
-data/$1-$2-$3.out: bin/$1-$2-$3
-	@mkdir -p data
+data/$1-$2-$3.out: bin/$1-$2-$3 data
 	@./benchmark-mode.sh on
 	@$$(realtime) $$< | tee $$@
 	@./benchmark-mode.sh off
@@ -52,9 +56,8 @@ define ccjson
     "file": "$3" },
 endef
 
-bin/compile_commands.json: Makefile run.sh
+bin/compile_commands.json: Makefile run.sh bin
 	@echo "Setting up 'compilation database' for Clang tooling."
-	@mkdir -p bin
 	$(file >$@,[)
 	$(foreach v,$(variants),$(foreach b,$(benchmarks),$(foreach a,$(archs),$(file >>$@,$(call ccjson,$a,$(CXXFLAGS) $($v),$b.cpp)))))
 	@truncate --size=-2 "$@"
