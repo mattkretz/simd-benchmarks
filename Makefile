@@ -2,9 +2,14 @@ benchmarks=$(patsubst %.cpp,%,$(wildcard *.cpp))
 archs=native ivybridge westmere x86-64
 CXXFLAGS=-g0 -O3 -std=gnu++2b -Wall -Wextra -Wno-psabi
 
-stdsimd=-include ../simd-prototyping/simd
+stdsimd=$(shell test -f ../simd-prototyping/simd && echo '-include ../simd-prototyping/simd')
 fastmath=-ffast-math
 default=
+
+variants=default fastmath
+ifneq ($(stdsimd),)
+variants+=stdsimd
+endif
 
 realtime::=chrt --fifo 10
 realtime::=$(shell $(realtime) true 2>/dev/null && echo "$(realtime)")
@@ -16,7 +21,7 @@ debug:
 
 targets=
 define maketarget
-bin/$1-$2-$3: $1.cpp bench.h Makefile
+bin/$1-$2-$3: $1.cpp bench.h bin/compile_commands.json
 	@mkdir -p bin
 	$$(CXX) $$(CXXFLAGS) $$($2) -march=$3 -lmvec $1.cpp -o $$@
 
@@ -33,7 +38,7 @@ targets+=$1-$2-$3
 
 endef
 
-$(foreach b,$(benchmarks),$(foreach v,stdsimd fastmath default,$(foreach a,$(archs),$(eval $(call maketarget,$b,$v,$a)))))
+$(foreach b,$(benchmarks),$(foreach v,$(variants),$(foreach a,$(archs),$(eval $(call maketarget,$b,$v,$a)))))
 
 all-targets: $(targets)
 
@@ -43,17 +48,14 @@ define ccjson
     "file": "$3" },
 endef
 
-bin/compile_commands.json: Makefile run.sh always-remake
+bin/compile_commands.json: Makefile run.sh
 	@echo "Setting up 'compilation database' for Clang tooling."
 	@mkdir -p bin
 	$(file >$@,[)
-	$(foreach v,stdsimd default,$(foreach b,$(benchmarks),$(foreach a,$(archs),$(file >>$@,$(call ccjson,$a,$(CXXFLAGS) $($v),$b.cpp)))))
+	$(foreach v,$(variants),$(foreach b,$(benchmarks),$(foreach a,$(archs),$(file >>$@,$(call ccjson,$a,$(CXXFLAGS) $($v),$b.cpp)))))
 	@truncate --size=-2 "$@"
 	@echo "" >> "$@"
 	@echo "]" >> "$@"
 
-.PHONY: always-remake
-always-remake: ;
-
-help:
+help: bin/compile_commands.json
 	@echo "$(targets)"|tr ' ' '\n'
