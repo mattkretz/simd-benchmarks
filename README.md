@@ -1,5 +1,6 @@
 # stdx::simd Benchmarks
 
+[![CI](https://github.com/mattkretz/simd-benchmarks/actions/workflows/CI.yml/badge.svg)](https://github.com/mattkretz/simd-benchmarks/actions/workflows/CI.yml)
 [![DOI](https://zenodo.org/badge/771078921.svg)](https://zenodo.org/doi/10.5281/zenodo.10810248)
 [![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B%20%20%E2%97%8F%20%20%E2%97%8B-orange)](https://fair-software.eu)
 
