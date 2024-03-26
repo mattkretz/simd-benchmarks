@@ -200,13 +200,34 @@ template <int N>
   using Info = std::array<const char*, N>;
 
 template <int N>
-  using Times = std::array<double, N>;
+  struct Times
+  {
+    std::array<double, N> cycles_per_call;
+    int size;
+
+    using DoubleN = double[N];
+
+    constexpr
+    Times(std::floating_point auto... init)
+    : cycles_per_call{init...}, size(-1)
+    { static_assert(sizeof...(init) == N); }
+
+    constexpr
+    Times(const std::array<double, N>& init, int init_size)
+    : cycles_per_call(init), size(init_size)
+    {}
+
+    constexpr double
+    operator[](int i) const
+    { return cycles_per_call[i]; }
+  };
 
 template <int Special, class...>
   struct Benchmark
   { static_assert("The benchmark must specialize this type."); };
 
-struct NoRef {};
+struct NoRef
+{ static constexpr int size = -1; };
 
 template <typename T, typename B>
   concept accept_type_for_benchmark
@@ -231,16 +252,25 @@ template <class T, class B, class Ref = NoRef>
     static constexpr char dgreen[] = "\033[0;40;32m";
     static constexpr char normal[] = "\033[0m";
 
-    const Times<N> results = B::template run<T>();
+    const Times<N> results = { B::template run<T>().cycles_per_call, size_v<T> };
     std::cout << id;
     for (int i = 0; i < N; ++i)
       {
         double speedup = 1;
         if constexpr (!std::is_same_v<Ref, NoRef>)
-          speedup = ref[i] * size_v<T> / results[i];
+          speedup = ref[i] * size_v<T> / (results[i] * ref.size);
 
         std::cout << std::setprecision(3) << std::setw(15) << results[i];
-        if (speedup >= speedup_size_v<T> * 0.90 && speedup >= 1.5)
+        if (speedup_size_v<T> <= ref.size)
+          {
+            if (speedup >= 1.1)
+              std::cout << green;
+            else if (speedup > 0.995)
+              std::cout << dgreen;
+            else
+              std::cout << red;
+          }
+        else if (speedup >= speedup_size_v<T> * 0.90 / ref.size && speedup >= 1.5)
           std::cout << green;
         else if (speedup > 1.1)
           std::cout << dgreen;
@@ -371,10 +401,57 @@ template <class T, class... ExtraFlags>
         std::memset(abistr + ncpy, ' ', abi_field - ncpy);
     };
 
+    using V16 [[gnu::vector_size(16)]] = T;
+    auto bench_gnu_vectors = [&](const auto ref0) {
+      const auto ref16 = [&] {
+        if constexpr (alignof(V16) == sizeof(V16))
+          {
+            set_abistr(("[[" + std::to_string(16 / sizeof(T)) + "]]").c_str());
+            return bench_lat_thr<V16, B>(id, ref0);
+          }
+        else
+          return ref0;
+      }();
+      const auto ref32 = [&] {
+#ifdef __AVX__
+        using V32 [[gnu::vector_size(32)]] = T;
+        if constexpr (alignof(V32) == sizeof(V32))
+          {
+            set_abistr(("[[" + std::to_string(32 / sizeof(T)) + "]]").c_str());
+            return bench_lat_thr<V32, B>(id, ref16);
+          }
+        else
+#endif
+          return ref16;
+      }();
+      return [&] {
+#ifdef __AVX512F__
+        using V64 [[gnu::vector_size(64)]] = T;
+        if constexpr (alignof(V64) == sizeof(V64))
+          {
+            set_abistr(("[[" + std::to_string(64 / sizeof(T)) + "]]").c_str());
+            return bench_lat_thr<V64, B>(id, ref32);
+          }
+        else
+#endif
+          return ref32;
+      }();
+    };
+
     set_abistr("");
     const auto ref0 = bench_lat_thr<T, B>(id);
     set_abistr("1");
-    const auto ref = bench_lat_thr<simd<T, 1>, B>(id, ref0);
+    const auto ref1 = bench_lat_thr<simd<T, 1>, B>(id, ref0);
+
+    constexpr bool use_gnu_reference
+      = std::is_same_v<decltype(ref1), const NoRef> and alignof(V16) == sizeof(V16);
+    const auto ref = [&] {
+      if constexpr (use_gnu_reference)
+        return bench_gnu_vectors(ref1);
+      else
+        return ref1;
+    }();
+
     [&]<int... Is>(std::integer_sequence<int, Is...>) {
       ([&] {
         constexpr int N = 2 << Is;
@@ -397,28 +474,8 @@ template <class T, class... ExtraFlags>
         }(std::make_integer_sequence<int, N>());
       }
 
-    using V16 [[gnu::vector_size(16)]] = T;
-    if constexpr (alignof(V16) == sizeof(V16))
-      {
-        set_abistr(("[[" + std::to_string(16 / sizeof(T)) + "]]").c_str());
-        bench_lat_thr<V16, B>(id, ref);
-      }
-#ifdef __AVX__
-    using V32 [[gnu::vector_size(32)]] = T;
-    if constexpr (alignof(V32) == sizeof(V32))
-      {
-        set_abistr(("[[" + std::to_string(32 / sizeof(T)) + "]]").c_str());
-        bench_lat_thr<V32, B>(id, ref);
-      }
-#endif
-#ifdef __AVX512F__
-    using V64 [[gnu::vector_size(64)]] = T;
-    if constexpr (alignof(V64) == sizeof(V64))
-      {
-        set_abistr(("[[" + std::to_string(64 / sizeof(T)) + "]]").c_str());
-        bench_lat_thr<V64, B>(id, ref);
-      }
-#endif
+    if constexpr (not use_gnu_reference)
+      bench_gnu_vectors(ref);
 
     char sep[id_size + 2 * 15 + 2 * 12];
     std::memset(sep, '-', sizeof(sep) - 1);
@@ -515,7 +572,10 @@ template <typename T>
           fake_modify_one(d);
       }
 #endif
-    else if constexpr (std::is_array_v<T> or (std::is_class_v<T> and requires { x[0]; }))
+    else if constexpr (std::is_array_v<T>
+                         or requires(void (&test)(typename T::value_type&)) {
+                           {test(*std::begin(x))};
+                         })
       {
         for (auto& y : x)
           fake_modify_one(y);
@@ -560,6 +620,14 @@ template <typename T>
           fake_read_one(d);
       }
 #endif
+    else if constexpr (std::is_array_v<T>
+                         or requires(void (&test)(const typename T::value_type&)) {
+                           {test(*std::begin(x))};
+                         })
+      {
+        for (const auto& y : x)
+          fake_read_one(y);
+      }
     else if constexpr (sizeof(x) >= 16)
       {
         static_assert(vec_builtin<T>);
