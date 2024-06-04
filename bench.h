@@ -483,13 +483,13 @@ template <class T, class... ExtraFlags>
     std::cout << sep << std::endl;
   }
 
-template <long Iterations, int Retries = 10, class F>
+template <long Iterations = 50'000, int Retries = 20, class F>
   [[gnu::noinline]]
   double
   time_mean2(F&& fun)
   {
     struct {
-      double mean = 0;
+      //double mean = 0;
       double minimum = std::numeric_limits<double>::max();
       unsigned long tsc_start = 0;
       int todo = Retries;
@@ -507,8 +507,12 @@ template <long Iterations, int Retries = 10, class F>
           {
             const double elapsed = tsc_end - tsc_start;
             const double one_mean = elapsed / Iterations;
-            mean += one_mean / Retries;
-            minimum = std::min(minimum, one_mean);
+            //mean += one_mean / Retries;
+            if (one_mean < minimum)
+              {
+                minimum = one_mean;
+                todo = Retries;
+              }
           }
         if (todo) [[likely]]
           {
@@ -524,7 +528,7 @@ template <long Iterations, int Retries = 10, class F>
     return collector.minimum;
   }
 
-template <long Iterations, int Retries = 10, class F, class... Args>
+template <long Iterations = 50'000, int Retries = 20, class F, class... Args>
   double
   time_mean(F&& fun, Args&&... args)
   {
@@ -538,7 +542,11 @@ template <long Iterations, int Retries = 10, class F, class... Args>
           fun(std::forward<Args>(args)...);
         const auto end = __rdtscp(&tmp);
         const double elapsed = end - start;
-        minimum = std::min(minimum, elapsed);
+        if (elapsed < minimum)
+          {
+            minimum = elapsed;
+            tries = -1;
+          }
       }
     return minimum / Iterations;
   }
@@ -645,7 +653,7 @@ template <typename... Ts>
 template <typename T, std::size_t N>
   using carray = T[N];
 
-template <long Iterations = 200'000, int Retries = 10, typename T, std::size_t N>
+template <long Iterations = 50'000, int Retries = 20, typename T, std::size_t N>
   double
   time_latency(carray<T, N>& data, auto&& process_one, auto&& fake_one)
   {
@@ -665,7 +673,7 @@ template <long Iterations = 200'000, int Retries = 10, typename T, std::size_t N
     std::abort();
   }
 
-template <long Iterations = 200'000, int Retries = 10, typename T, std::size_t N>
+template <long Iterations = 50'000, int Retries = 20, typename T, std::size_t N>
   double
   time_throughput(carray<T, N>& data, auto&& process_one, auto&& fake_one)
   {
