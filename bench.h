@@ -688,10 +688,10 @@ template <long Iterations = 50'000, int Retries = 20, typename T, std::size_t N>
              std::ranges::copy(init_data, data);
              while (need_more)
                {
-                 fake_read(data[Is]...);
+                 //fake_read(data[Is]...);
                  ((data[Is] = process_one(std::false_type(), data[Is])), ...);
-                 fake_read(data[Is]...);
                }
+             fake_read(data[Is]...);
            }(std::make_index_sequence<N>());
          }) - time_mean2<Iterations, Retries>([&](auto& need_more) {
                 [&]<std::size_t... Is>(std::index_sequence<Is...>) {
@@ -699,10 +699,10 @@ template <long Iterations = 50'000, int Retries = 20, typename T, std::size_t N>
                   std::ranges::copy(init_data, data);
                   while (need_more)
                     {
-                      fake_read(data[Is]...);
+                      //fake_read(data[Is]...);
                       ((data[Is] = process_one(std::true_type(), data[Is])), ...);
-                      fake_read(data[Is]...);
                     }
+                  fake_read(data[Is]...);
                 }(std::make_index_sequence<N>());
               }))
           / N;
