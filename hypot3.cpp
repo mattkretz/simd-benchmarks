@@ -231,27 +231,31 @@ template <int Special>
         T zero = T();
         T half = T() + value_type_t<T>(.5);
         fake_modify(zero, half);
-        auto process_one = [=](auto& inout) [[gnu::always_inline]] {
-          T a = inout[0] + zero;
-          T b = inout[1] + zero;
-          T c = inout[2] + zero;
-          T x = call_hypot(a, b, c);
-          inout[0] = a + x * zero;
-          inout[1] = b + x * zero;
-          inout[2] = c + x * zero;
-        };
-
-        auto fake_one = [=](auto& inout) [[gnu::always_inline]] {
-          T a = inout[0] + zero;
-          T b = inout[1] + zero;
-          T c = inout[2] + zero;
-          T x = a;
-          T y = b;
-          T z = c;
-          fake_modify(x, y, z);
-          inout[0] = a + x * zero;
-          inout[1] = b + y * zero;
-          inout[2] = c + z * zero;
+        auto process_one = [=] [[gnu::always_inline]] (auto fake, auto in) {
+          T a = in[0] + zero;
+          T b = in[1] + zero;
+          T c = in[2] + zero;
+          if constexpr (fake)
+            {
+              T x = a;
+              T y = b;
+              T z = c;
+              fake_modify(x, y, z);
+              return std::array{
+                a + x * zero,
+                b + y * zero,
+                c + z * zero
+              };
+            }
+          else
+            {
+              T x = call_hypot(a, b, c);
+              return std::array{
+                a + x * zero,
+                b + x * zero,
+                c + x * zero
+              };
+            }
         };
 
         std::array<T, 3> data[8] = {};
@@ -262,8 +266,8 @@ template <int Special>
             d[2] += 0x1.f323e6p-2f;
           }
         const Times<4> r = {
-          time_latency(data, process_one, fake_one),
-          time_throughput(data, process_one, fake_one),
+          time_latency(data, process_one),
+          time_throughput(data, process_one),
           do_benchmark<true, T>(), do_benchmark<false, T>()
         };
         //std::cout << data[0][0] << ' ' << data[0][1] << ' ' << data[0][2] << std::endl;

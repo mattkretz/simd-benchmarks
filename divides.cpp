@@ -9,58 +9,90 @@
 template <int Special>
   struct Benchmark<Special>
   {
-    static constexpr Info<2> info = {"Latency", "Throughput"};
+    static constexpr Info<4> info = {"Latency", "Throughput", "ΔLatency", "ΔThroughput"};
 
     template <class T>
       [[gnu::flatten]]
-      static Times<2>
+      static Times<info.size()>
       run()
       {
         using TT = value_type_t<T>;
-        constexpr int nbits = CHAR_BIT * sizeof(TT);
-        T a0 = T() + std::numeric_limits<value_type_t<T>>::max();
-        T a1 = T() + std::numeric_limits<value_type_t<T>>::max();
-        T a2 = T() + std::numeric_limits<value_type_t<T>>::max();
-        T a3 = T() + std::numeric_limits<value_type_t<T>>::max();
-        if constexpr (std::is_integral_v<TT>)
-          {
-            a0 <<= nbits/2;
-            a1 <<= nbits/2;
-            a2 <<= nbits/2;
-            a3 <<= nbits/2;
-          }
-        T b = T() + TT(7);
+
+        constexpr TT one = 1;
+
+        constexpr TT init = [] {
+          constexpr int nbits = CHAR_BIT * sizeof(TT);
+          TT init = std::numeric_limits<TT>::max();
+          if constexpr (std::is_integral_v<TT>)
+            init <<= nbits/2;
+          return init;
+        }();
+
+        T zerov = T();
+        T b = zerov + TT(7);
+
+        fake_modify(zerov, b);
+
+        T data[6];
+        for (T& a : data)
+          a = zerov + init;
+
         return {
-          0.25 * time_mean<1'000'000>([&] {
-            fake_modify(a0, b);
-            T r = a0 / b;
-            r = a0 / r;
-            r = a0 / r;
-            r = a0 / r;
-            b = r;
-          }),
-          0.25 * time_mean<1'000'000>([&] {
-            fake_modify(a0, a1, a2, a3, b);
-            T r0 = a0 / b;
-            T r1 = a1 / b;
-            T r2 = a2 / b;
-            T r3 = a3 / b;
-            fake_read(r0, r1, r2, r3);
-          })};
+          0.25 * time_mean([&] {
+                   T r = data[0] / b;
+                   r = data[0] / r;
+                   r = data[0] / r;
+                   r = data[0] / r;
+                   b = r;
+                 }),
+          1./6. * time_mean([&] {
+                    fake_modify(b);
+                    T r0 = data[0] / b;
+                    T r1 = data[1] / b;
+                    T r2 = data[2] / b;
+                    T r3 = data[3] / b;
+                    T r4 = data[4] / b;
+                    T r5 = data[5] / b;
+                    fake_read(r0, r1, r2, r3, r4, r5);
+                  }),
+          0.25 * time_latency(data, [&] [[gnu::always_inline]] (auto fake, T a) {
+                   T x = a - one;
+                   if constexpr (fake)
+                     fake_modify(x);
+                   else
+                     {
+                       x = x / b;
+                       fake_read(x);
+                       x = x / b;
+                       fake_read(x);
+                       x = x / b;
+                       fake_read(x);
+                       x = x / b;
+                     }
+                   return x * zerov + init;
+                 }),
+          time_throughput(data, [=] [[gnu::always_inline]] (auto fake, T a) {
+            if constexpr (fake)
+              fake_modify(a);
+            else
+              a = a / b;
+            return a;
+          })
+        };
       }
   };
 
 int
 main()
 {
-  bench_all<signed char>();
+  /*  bench_all<signed char>();
   bench_all<unsigned char>();
   bench_all<signed short>();
   bench_all<unsigned short>();
   bench_all<signed int>();
   bench_all<unsigned int>();
   bench_all<signed long>();
-  bench_all<unsigned long>();
+  bench_all<unsigned long>();*/
   bench_all<float>();
-  bench_all<double>();
+  //bench_all<double>();
 }

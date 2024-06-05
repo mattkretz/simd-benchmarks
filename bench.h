@@ -13,6 +13,7 @@
 #include <experimental/simd>
 #endif
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <concepts>
@@ -655,15 +656,15 @@ template <typename T, std::size_t N>
 
 template <long Iterations = 50'000, int Retries = 20, typename T, std::size_t N>
   double
-  time_latency(carray<T, N>& data, auto&& process_one, auto&& fake_one)
+  time_latency(carray<T, N>& data, auto&& process_one)
   {
     for (auto& x : data)
       fake_modify_one(x);
 
     const double dt = time_mean<Iterations, Retries>([&] [[gnu::always_inline]] {
-                        process_one(data[0]);
+                        data[0] = process_one(std::false_type(), data[0]);
                       }) - time_mean<Iterations, Retries>([&] [[gnu::always_inline]] {
-                             fake_one(data[0]);
+                             data[0] = process_one(std::true_type(), data[0]);
                            });
 
     if (dt >= 0.98)
@@ -675,21 +676,33 @@ template <long Iterations = 50'000, int Retries = 20, typename T, std::size_t N>
 
 template <long Iterations = 50'000, int Retries = 20, typename T, std::size_t N>
   double
-  time_throughput(carray<T, N>& data, auto&& process_one, auto&& fake_one)
+  time_throughput(carray<T, N>& init_data, auto&& process_one)
   {
-    for (auto& x : data)
+    for (auto& x : init_data)
       fake_modify_one(x);
 
     const double dt
       = (time_mean2<Iterations, Retries>([&](auto& need_more) {
            [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+             T data[N];
+             std::ranges::copy(init_data, data);
              while (need_more)
-               (process_one(data[Is]), ...);
+               {
+                 fake_read(data[Is]...);
+                 ((data[Is] = process_one(std::false_type(), data[Is])), ...);
+                 fake_read(data[Is]...);
+               }
            }(std::make_index_sequence<N>());
          }) - time_mean2<Iterations, Retries>([&](auto& need_more) {
                 [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+                  T data[N];
+                  std::ranges::copy(init_data, data);
                   while (need_more)
-                    (fake_one(data[Is]), ...);
+                    {
+                      fake_read(data[Is]...);
+                      ((data[Is] = process_one(std::true_type(), data[Is])), ...);
+                      fake_read(data[Is]...);
+                    }
                 }(std::make_index_sequence<N>());
               }))
           / N;

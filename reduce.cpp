@@ -49,24 +49,20 @@ template <int Special>
         T reset = T() + TT(size_v<T>);
         fake_modify(one, reset);
 
-        auto process_one = [&](T& inout) {
-          T x = inout + one;
-          if constexpr (std::convertible_to<TT, T>)
+        auto process_one = [&] [[gnu::always_inline]] (auto fake, T in) {
+          T x = in + one;
+          if constexpr (fake)
+            fake_modify(x);
+          else if constexpr (std::convertible_to<TT, T>)
             x = my::reduce(x);
           else
             x = T() + my::reduce(x);
-          inout = x - reset;
-        };
-
-        auto fake_one = [&](T& inout) {
-          T x = inout + one;
-          fake_modify(x);
-          inout = x - reset;
+          return x - reset;
         };
 
         T a[8] = {};
-        return { time_latency(a, process_one, fake_one),
-                 time_throughput(a, process_one, fake_one) };
+        return { time_latency(a, process_one),
+                 time_throughput(a, process_one) };
       }
   };
 
