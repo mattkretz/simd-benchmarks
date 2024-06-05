@@ -85,14 +85,14 @@ template <int Special>
 int
 main()
 {
-  /*  bench_all<signed char>();
+  bench_all<signed char>();
   bench_all<unsigned char>();
   bench_all<signed short>();
   bench_all<unsigned short>();
   bench_all<signed int>();
   bench_all<unsigned int>();
   bench_all<signed long>();
-  bench_all<unsigned long>();*/
+  bench_all<unsigned long>();
   bench_all<float>();
-  //bench_all<double>();
+  bench_all<double>();
 }
