@@ -79,7 +79,6 @@ template <int Special>
         static_assert(std::has_single_bit(nbits));
 
         constexpr int N = 1024 / sizeof(T);
-        using Mem = alignas(64) T[N];
 
         constexpr int NRandom = 64 * 64;
 
@@ -109,7 +108,6 @@ template <int Special>
         return {
           time_mean2<800'000>([&](auto& need_more)
           {
-            Mem mem = {};
             V obj = {};
             while (need_more)
               {
@@ -127,7 +125,6 @@ template <int Special>
           }),
           time_mean2<800'000>([&](auto& need_more)
           {
-            Mem mem = {};
             V obj = {};
             UV iota([](U i) { return i; });
             fake_modify(iota);

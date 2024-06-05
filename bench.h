@@ -711,7 +711,7 @@ template <typename T>
 template <vec_builtin T, class... More>                                        \
   T name(T a, More... more)                                                    \
   {                                                                            \
-    T r;                                                                       \
+    T r {};                                                                    \
     for (int i = 0; i < width_of<T>; ++i)                                      \
       r[i] = std::name(a[i], subscript_or_value(more, i)...);                  \
     return r;                                                                  \

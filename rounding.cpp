@@ -32,7 +32,7 @@ template <class T>
     else if constexpr (vec_builtin<T>)
       {
         T r = {};
-        for (int i = 0; i < sizeof(T) / sizeof(r[0]); ++i)
+        for (unsigned i = 0; i < sizeof(T) / sizeof(r[0]); ++i)
           r[i] = random<std::remove_reference_t<decltype(r[0])>>();
         return r;
       }

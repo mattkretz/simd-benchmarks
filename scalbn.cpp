@@ -20,7 +20,6 @@ template <int Special, class What>
         T inputs[64] = {};
         for (int i = 0; i < 64; ++i)
           inputs[i] = T() + i * .83f - 16;
-        unsigned i = 0;
         int n = 8;
         fake_modify(n);
         T& a0 = inputs[0];
